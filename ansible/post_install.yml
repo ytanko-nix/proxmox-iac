@@ -1,0 +1,18 @@
+- hosts: all
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Ensure system is updated (Rocky)
+      ansible.builtin.dnf:
+        name: "*"
+        state: latest
+        update_only: true
+
+    - name: Install base utilities
+      ansible.builtin.dnf:
+        name:
+          - vim
+          - curl
+          - git
+          - htop
+        state: present

@@ -1,0 +1,14 @@
+#cloud-config
+# Generic Cloud-Init template
+# Note: Hostname and user are configured via Terraform variables
+# This file serves as a reference - actual config is passed via Terraform
+manage_etc_hosts: true
+package_update: true
+packages:
+  - curl
+  - htop
+  - git
+runcmd:
+  - echo "Running post-install steps..."
+  - dnf -y update || apt-get update || yum update -y || true
+  - echo "Cloud-Init completed on $(date)" | tee /var/log/cloud-init-done.log
