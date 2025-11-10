@@ -1,50 +1,22 @@
-# Terraform
 .terraform/
 *.tfstate
 *.tfstate.*.backup
 *.tfstate.backup
 crash.log
+*.log
 .terraform.lock.hcl
 .terragrunt-cache/
-
-# Sensitive configuration files - NEVER COMMIT
-terraform/terraform.tfvars
-terraform/*.tfvars.secrets
-terraform/*.tfvars.secret
-terraform/*.secrets
-terraform/*.secret
-# Note: terraform.tfvars.example should be committed (it's a template)
-*.auto.tfvars
-
-# Environment files
-.env
-.env.local
-.env.*.local
-
-# Secret files and keys
-*.key
-*.pem
-*.p12
-*.pfx
-secrets/
-vault/
-
-# IDE
+.venv/
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
-
-# OS
 .DS_Store
-Thumbs.db
 
-# Python
-.venv/
-venv/
-__pycache__/
-*.pyc
-
-# Logs
-*.log
+# SECURITY: Exclude sensitive configuration files
+*.tfvars
+*.auto.tfvars
+.env
+.env.local
+*.key
+*.pem
+secrets/
+vault/
