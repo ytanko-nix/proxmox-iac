@@ -10,3 +10,13 @@ crash.log
 .vscode/
 .idea/
 .DS_Store
+
+# SECURITY: Exclude sensitive configuration files
+*.tfvars
+*.auto.tfvars
+.env
+.env.local
+*.key
+*.pem
+secrets/
+vault/
