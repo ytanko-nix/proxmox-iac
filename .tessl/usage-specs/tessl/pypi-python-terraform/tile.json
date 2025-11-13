@@ -1,0 +1,7 @@
+{
+  "name": "tessl/pypi-python-terraform",
+  "version": "0.14.0",
+  "docs": "docs/index.md",
+  "describes": "pkg:pypi/python-terraform@0.14.0",
+  "summary": "Python wrapper for HashiCorp's Terraform command-line tool providing programmatic access to all Terraform functionality"
+}
