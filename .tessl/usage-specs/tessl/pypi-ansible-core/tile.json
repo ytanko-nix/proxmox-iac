@@ -1,0 +1,7 @@
+{
+  "name": "tessl/pypi-ansible-core",
+  "version": "2.19.0",
+  "docs": "docs/index.md",
+  "describes": "pkg:pypi/ansible-core@2.19.1",
+  "summary": "Radically simple IT automation platform for configuration management, application deployment, cloud provisioning, and network automation"
+}
