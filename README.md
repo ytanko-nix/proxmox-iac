@@ -81,3 +81,9 @@ See `terraform/main.tf` for the complete configuration.
 ## License
 
 This IaC project is open source. Modify as needed for your environment.
+
+## Documentation
+
+- Tessl framework guide: `.tessl/project/TESSL_GUIDE.md`
+- Project specification: `.tessl/project/spec.md`
+- Knowledge Index: `KNOWLEDGE.md`

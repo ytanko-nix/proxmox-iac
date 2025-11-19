@@ -346,7 +346,7 @@ Proxmox Node
 
 ## Support
 
-- See `docs/DESIGN.md` for architecture details
+- See `.tessl/project/spec.md` for architecture and design details
 - See `docs/TODO.md` for remaining tasks
 - Check `README.md` for full documentation
 - View Terraform state: `cd terraform && terraform state list`
