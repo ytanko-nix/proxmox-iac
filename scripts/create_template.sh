@@ -4,7 +4,7 @@ set -euo pipefail
 # Configuration
 TEMPLATE_ID=9000
 TEMPLATE_NAME="rocky9-cloudinit-template"
-STORAGE="local"
+STORAGE="local-lvm"
 IMAGE_URL="https://download.rockylinux.org/pub/rocky/9/images/x86_64/Rocky-9-GenericCloud.latest.x86_64.qcow2"
 IMAGE_NAME="Rocky-9-GenericCloud.latest.x86_64.qcow2"
 
