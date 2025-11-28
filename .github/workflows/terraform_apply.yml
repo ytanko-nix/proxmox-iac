@@ -1,0 +1,540 @@
+# =============================================================================
+# Terraform Plan & Apply Workflow
+# =============================================================================
+# Этот workflow выполняет:
+# - Создание Terraform plan при push в main или вручную
+# - Apply только после ручного подтверждения (environment protection)
+#
+# Требуемые секреты (GitHub Repository Secrets):
+# - PM_API_URL: URL Proxmox API (например: https://proxmox.local:8006/api2/json)
+# - PM_API_TOKEN_ID: ID токена (например: user@pam!token-name)
+# - PM_API_TOKEN_SECRET: Секрет токена
+#
+# Опциональные секреты:
+# - PM_TLS_INSECURE: "true" для самоподписанных сертификатов
+#
+# ВАЖНО: Настройте GitHub Environment "production" с required reviewers
+# для защиты от случайного apply
+# =============================================================================
+
+name: Terraform Plan & Apply
+
+on:
+  # Запуск после merge в main
+  push:
+    branches:
+      - main
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform_apply.yml'
+
+  # Ручной запуск с выбором workspace
+  workflow_dispatch:
+    inputs:
+      workspace:
+        description: 'Terraform workspace для применения'
+        required: true
+        default: 'default'
+        type: choice
+        options:
+          - default
+          - staging
+          - production
+      action:
+        description: 'Действие'
+        required: true
+        default: 'plan'
+        type: choice
+        options:
+          - plan
+          - apply
+      auto_approve:
+        description: 'Автоматический apply (ОПАСНО!)'
+        required: false
+        default: false
+        type: boolean
+
+# Предотвращение параллельных запусков
+concurrency:
+  group: terraform-${{ github.ref }}
+  cancel-in-progress: false
+
+# =============================================================================
+# Переменные окружения
+# =============================================================================
+env:
+  # Версия Terraform
+  TF_VERSION: "1.7.5"
+  
+  # Рабочая директория
+  TF_WORKING_DIR: terraform
+  
+  # Логирование Terraform
+  TF_LOG: "INFO"
+  
+  # Отключить интерактивный ввод
+  TF_INPUT: "false"
+  
+  # Режим автоматизации
+  TF_IN_AUTOMATION: "true"
+  
+  # Timeout для операций (в секундах)
+  TF_TIMEOUT: "600"
+
+jobs:
+  # ===========================================================================
+  # Job 1: Terraform Plan
+  # ===========================================================================
+  plan:
+    name: 📋 Terraform Plan
+    runs-on: ubuntu-latest
+    
+    # Outputs для передачи в следующие jobs
+    outputs:
+      plan_exit_code: ${{ steps.plan.outputs.exitcode }}
+      has_changes: ${{ steps.plan.outputs.has_changes }}
+    
+    # Права для записи комментариев в PR
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+
+    steps:
+      # -----------------------------------------------------------------------
+      # Шаг 1: Checkout репозитория
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # -----------------------------------------------------------------------
+      # Шаг 2: Установка Terraform
+      # -----------------------------------------------------------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          # Включить wrapper для захвата stdout/stderr
+          terraform_wrapper: true
+
+      # -----------------------------------------------------------------------
+      # Шаг 3: Кэширование Terraform плагинов
+      # -----------------------------------------------------------------------
+      - name: Cache Terraform plugins
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.terraform.d/plugin-cache
+            ${{ env.TF_WORKING_DIR }}/.terraform
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/*.tf', '**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      # -----------------------------------------------------------------------
+      # Шаг 4: Маскирование секретов в логах
+      # Дополнительная защита для предотвращения утечки credentials
+      # -----------------------------------------------------------------------
+      - name: Mask secrets in logs
+        run: |
+          echo "🔒 Маскирование секретов в логах..."
+          
+          # Маскировать значения секретов
+          echo "::add-mask::${{ secrets.PM_API_URL }}"
+          echo "::add-mask::${{ secrets.PM_API_TOKEN_ID }}"
+          echo "::add-mask::${{ secrets.PM_API_TOKEN_SECRET }}"
+
+      # -----------------------------------------------------------------------
+      # Шаг 5: Проверка наличия обязательных секретов
+      # -----------------------------------------------------------------------
+      - name: Validate required secrets
+        run: |
+          echo "🔐 Проверка наличия обязательных секретов..."
+          
+          missing_secrets=""
+          
+          if [ -z "${{ secrets.PM_API_URL }}" ]; then
+            missing_secrets="$missing_secrets PM_API_URL"
+          fi
+          
+          if [ -z "${{ secrets.PM_API_TOKEN_ID }}" ]; then
+            missing_secrets="$missing_secrets PM_API_TOKEN_ID"
+          fi
+          
+          if [ -z "${{ secrets.PM_API_TOKEN_SECRET }}" ]; then
+            missing_secrets="$missing_secrets PM_API_TOKEN_SECRET"
+          fi
+          
+          if [ -n "$missing_secrets" ]; then
+            echo "❌ Отсутствуют обязательные секреты:$missing_secrets"
+            echo "Настройте секреты в Settings → Secrets and variables → Actions"
+            exit 1
+          fi
+          
+          echo "✅ Все обязательные секреты настроены"
+
+      # -----------------------------------------------------------------------
+      # Шаг 6: Инициализация Terraform
+      # -reconfigure: переинициализация backend
+      # -upgrade: обновить провайдеры до последних версий
+      # -----------------------------------------------------------------------
+      - name: Terraform Init
+        id: init
+        run: |
+          echo "🚀 Инициализация Terraform..."
+          terraform init \
+            -input=false \
+            -upgrade
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          # Proxmox credentials из GitHub Secrets
+          TF_VAR_pm_api_url: ${{ secrets.PM_API_URL }}
+          TF_VAR_pm_api_token_id: ${{ secrets.PM_API_TOKEN_ID }}
+          TF_VAR_pm_api_token_secret: ${{ secrets.PM_API_TOKEN_SECRET }}
+          TF_VAR_pm_tls_insecure: ${{ secrets.PM_TLS_INSECURE || 'true' }}
+
+      # -----------------------------------------------------------------------
+      # Шаг 7: Выбор workspace
+      # -----------------------------------------------------------------------
+      - name: Select Terraform workspace
+        run: |
+          WORKSPACE="${{ github.event.inputs.workspace || 'default' }}"
+          echo "📁 Выбор workspace: $WORKSPACE"
+          
+          # Создать workspace если не существует
+          terraform workspace select "$WORKSPACE" || terraform workspace new "$WORKSPACE"
+          
+          echo "TERRAFORM_WORKSPACE=$WORKSPACE" >> $GITHUB_ENV
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      # -----------------------------------------------------------------------
+      # Шаг 8: Terraform Plan
+      # -detailed-exitcode: возвращает 2 если есть изменения
+      # -out: сохранить план в файл для последующего apply
+      # -----------------------------------------------------------------------
+      - name: Terraform Plan
+        id: plan
+        run: |
+          echo "📋 Создание Terraform plan..."
+          
+          # Создать план с детальным exit code
+          set +e
+          terraform plan \
+            -input=false \
+            -detailed-exitcode \
+            -out=tfplan \
+            -no-color \
+            2>&1 | tee plan_output.txt
+          
+          EXITCODE=$?
+          set -e
+          
+          # Анализ exit code
+          # 0 = нет изменений
+          # 1 = ошибка
+          # 2 = есть изменения
+          echo "exitcode=$EXITCODE" >> $GITHUB_OUTPUT
+          
+          if [ $EXITCODE -eq 0 ]; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "✅ План создан: изменений нет"
+          elif [ $EXITCODE -eq 2 ]; then
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "📝 План создан: обнаружены изменения"
+          else
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "❌ Ошибка создания плана"
+            exit 1
+          fi
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_VAR_pm_api_url: ${{ secrets.PM_API_URL }}
+          TF_VAR_pm_api_token_id: ${{ secrets.PM_API_TOKEN_ID }}
+          TF_VAR_pm_api_token_secret: ${{ secrets.PM_API_TOKEN_SECRET }}
+          TF_VAR_pm_tls_insecure: ${{ secrets.PM_TLS_INSECURE || 'true' }}
+
+      # -----------------------------------------------------------------------
+      # Шаг 9: Показать план
+      # -----------------------------------------------------------------------
+      - name: Show Terraform Plan
+        run: |
+          echo "📊 Terraform Plan Output:"
+          echo "========================="
+          terraform show -no-color tfplan
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      # -----------------------------------------------------------------------
+      # Шаг 10: Сохранить план как артефакт
+      # Артефакт используется в job apply
+      # -----------------------------------------------------------------------
+      - name: Upload Plan Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan-${{ github.run_id }}
+          path: |
+            ${{ env.TF_WORKING_DIR }}/tfplan
+            ${{ env.TF_WORKING_DIR }}/plan_output.txt
+          retention-days: 7
+          if-no-files-found: error
+
+      # -----------------------------------------------------------------------
+      # Шаг 11: Комментарий с планом (для workflow_dispatch)
+      # -----------------------------------------------------------------------
+      - name: Comment Plan Summary
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            
+            let planOutput = 'План недоступен';
+            try {
+              planOutput = fs.readFileSync('${{ env.TF_WORKING_DIR }}/plan_output.txt', 'utf8');
+              // Обрезать длинный вывод
+              if (planOutput.length > 60000) {
+                planOutput = planOutput.substring(0, 60000) + '\n... (обрезано)';
+              }
+            } catch (e) {
+              console.log('Не удалось прочитать файл плана');
+            }
+
+            const hasChanges = '${{ steps.plan.outputs.has_changes }}' === 'true';
+            const workspace = '${{ env.TERRAFORM_WORKSPACE }}';
+            
+            console.log(`📋 Plan Summary`);
+            console.log(`Workspace: ${workspace}`);
+            console.log(`Has Changes: ${hasChanges}`);
+            console.log(`Exit Code: ${{ steps.plan.outputs.exitcode }}`);
+
+  # ===========================================================================
+  # Job 2: Ручное подтверждение
+  # Использует GitHub Environment с required reviewers
+  # ===========================================================================
+  approval:
+    name: ⏳ Waiting for Approval
+    runs-on: ubuntu-latest
+    needs: plan
+    
+    # Запускать только если:
+    # 1. Есть изменения в плане
+    # 2. Запрошен apply (не только plan)
+    if: |
+      needs.plan.outputs.has_changes == 'true' && 
+      (github.event.inputs.action == 'apply' || github.event_name == 'push')
+    
+    # ВАЖНО: Настройте environment "production" с protection rules
+    # Settings → Environments → production → Required reviewers
+    environment:
+      name: production
+      url: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+    
+    steps:
+      - name: Approval granted
+        run: |
+          echo "✅ Apply одобрен!"
+          echo "Workspace: ${{ github.event.inputs.workspace || 'default' }}"
+          echo "Actor: ${{ github.actor }}"
+          echo "Approver: Требуется проверка в GitHub Environment"
+
+  # ===========================================================================
+  # Job 3: Terraform Apply
+  # ===========================================================================
+  apply:
+    name: 🚀 Terraform Apply
+    runs-on: ubuntu-latest
+    needs: [plan, approval]
+    
+    # Запускать только если approval пройден
+    if: |
+      needs.plan.outputs.has_changes == 'true' && 
+      needs.approval.result == 'success'
+    
+    environment:
+      name: production
+    
+    permissions:
+      contents: read
+      
+    steps:
+      # -----------------------------------------------------------------------
+      # Шаг 1: Checkout
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # Шаг 2: Setup Terraform
+      # -----------------------------------------------------------------------
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      # -----------------------------------------------------------------------
+      # Шаг 3: Кэширование
+      # -----------------------------------------------------------------------
+      - name: Cache Terraform plugins
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.terraform.d/plugin-cache
+            ${{ env.TF_WORKING_DIR }}/.terraform
+          key: ${{ runner.os }}-terraform-${{ hashFiles('**/*.tf', '**/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
+
+      # -----------------------------------------------------------------------
+      # Шаг 4: Маскирование секретов
+      # -----------------------------------------------------------------------
+      - name: Mask secrets
+        run: |
+          echo "::add-mask::${{ secrets.PM_API_URL }}"
+          echo "::add-mask::${{ secrets.PM_API_TOKEN_ID }}"
+          echo "::add-mask::${{ secrets.PM_API_TOKEN_SECRET }}"
+
+      # -----------------------------------------------------------------------
+      # Шаг 5: Скачать сохранённый план
+      # -----------------------------------------------------------------------
+      - name: Download Plan Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: terraform-plan-${{ github.run_id }}
+          path: ${{ env.TF_WORKING_DIR }}
+
+      # -----------------------------------------------------------------------
+      # Шаг 6: Terraform Init
+      # -----------------------------------------------------------------------
+      - name: Terraform Init
+        run: |
+          echo "🚀 Инициализация Terraform для apply..."
+          terraform init -input=false -upgrade
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_VAR_pm_api_url: ${{ secrets.PM_API_URL }}
+          TF_VAR_pm_api_token_id: ${{ secrets.PM_API_TOKEN_ID }}
+          TF_VAR_pm_api_token_secret: ${{ secrets.PM_API_TOKEN_SECRET }}
+          TF_VAR_pm_tls_insecure: ${{ secrets.PM_TLS_INSECURE || 'true' }}
+
+      # -----------------------------------------------------------------------
+      # Шаг 7: Выбор workspace
+      # -----------------------------------------------------------------------
+      - name: Select workspace
+        run: |
+          WORKSPACE="${{ github.event.inputs.workspace || 'default' }}"
+          echo "📁 Выбор workspace: $WORKSPACE"
+          terraform workspace select "$WORKSPACE" || terraform workspace new "$WORKSPACE"
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      # -----------------------------------------------------------------------
+      # Шаг 8: Проверка плана перед apply
+      # -----------------------------------------------------------------------
+      - name: Verify Plan
+        run: |
+          echo "🔍 Проверка сохранённого плана..."
+          
+          if [ ! -f tfplan ]; then
+            echo "❌ Файл плана не найден!"
+            exit 1
+          fi
+          
+          echo "✅ Файл плана найден"
+          terraform show -no-color tfplan | head -50
+        working-directory: ${{ env.TF_WORKING_DIR }}
+
+      # -----------------------------------------------------------------------
+      # Шаг 9: Terraform Apply
+      # Применение ТОЛЬКО сохранённого плана (без перепланирования)
+      # -----------------------------------------------------------------------
+      - name: Terraform Apply
+        id: apply
+        run: |
+          echo "🚀 Применение Terraform плана..."
+          echo "⚠️  ВНИМАНИЕ: Изменения будут применены к инфраструктуре!"
+          echo ""
+          
+          # Apply сохранённого плана
+          terraform apply \
+            -input=false \
+            -no-color \
+            tfplan
+          
+          echo ""
+          echo "✅ Terraform apply завершён успешно!"
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_VAR_pm_api_url: ${{ secrets.PM_API_URL }}
+          TF_VAR_pm_api_token_id: ${{ secrets.PM_API_TOKEN_ID }}
+          TF_VAR_pm_api_token_secret: ${{ secrets.PM_API_TOKEN_SECRET }}
+          TF_VAR_pm_tls_insecure: ${{ secrets.PM_TLS_INSECURE || 'true' }}
+
+      # -----------------------------------------------------------------------
+      # Шаг 10: Показать outputs
+      # -----------------------------------------------------------------------
+      - name: Show Terraform Outputs
+        if: success()
+        run: |
+          echo "📊 Terraform Outputs:"
+          echo "===================="
+          terraform output -no-color || echo "Нет outputs"
+        working-directory: ${{ env.TF_WORKING_DIR }}
+        env:
+          TF_VAR_pm_api_url: ${{ secrets.PM_API_URL }}
+          TF_VAR_pm_api_token_id: ${{ secrets.PM_API_TOKEN_ID }}
+          TF_VAR_pm_api_token_secret: ${{ secrets.PM_API_TOKEN_SECRET }}
+          TF_VAR_pm_tls_insecure: ${{ secrets.PM_TLS_INSECURE || 'true' }}
+
+  # ===========================================================================
+  # Job 4: Уведомление о статусе
+  # ===========================================================================
+  notify:
+    name: 📢 Notification
+    runs-on: ubuntu-latest
+    needs: [plan, apply]
+    if: always()
+    
+    steps:
+      - name: Summary
+        run: |
+          echo "## 📊 Terraform Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Plan | ${{ needs.plan.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.apply.result }}" != "skipped" ]; then
+            echo "| Apply | ${{ needs.apply.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Apply | ⏭️ Skipped |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Workspace:** ${{ github.event.inputs.workspace || 'default' }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Actor:** @${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Run ID:** ${{ github.run_id }}" >> $GITHUB_STEP_SUMMARY
+
+      # -----------------------------------------------------------------------
+      # Опционально: Slack/Email уведомления
+      # Раскомментируйте и настройте при необходимости
+      # -----------------------------------------------------------------------
+      # - name: Send Slack notification
+      #   if: failure()
+      #   uses: slackapi/slack-github-action@v1.24.0
+      #   with:
+      #     payload: |
+      #       {
+      #         "text": "❌ Terraform workflow failed!",
+      #         "blocks": [
+      #           {
+      #             "type": "section",
+      #             "text": {
+      #               "type": "mrkdwn",
+      #               "text": "*Terraform Workflow Failed*\nRepository: ${{ github.repository }}\nActor: ${{ github.actor }}\nRun: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+      #             }
+      #           }
+      #         ]
+      #       }
+      #   env:
+      #     SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
