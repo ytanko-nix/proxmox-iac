@@ -44,16 +44,40 @@ This document indexes dependencies, processes, and technologies used in the prox
 - Docs: https://pve.proxmox.com/pve-docs/
 - Project usage: Direct Proxmox API interactions
 
+### OpenJDK
+- Version: 17
+- Docs: https://openjdk.org/projects/jdk/17/
+- Project usage: Java runtime for application servers
+
+### Apache Tomcat
+- Version: 10.1.31
+- Docs: https://tomcat.apache.org/tomcat-10.1-doc/
+- Project usage: Java application server (installed via Ansible)
+
 ## Processes
 
 ### Feature development process
 See `.tessl/project/TESSL_GUIDE.md` — complete Tessl workflow guide.
 
 ### Deployment workflow
-1. `just tf-init` — Terraform init
-2. `just tf-plan` — Terraform plan
-3. `just tf-apply` — Terraform apply
-4. `just ansible-post` — Ansible post-configuration
+
+#### Quick deployment (recommended)
+```bash
+just tf-init        # First time only
+just deploy         # Create VM + Install Java/Tomcat
+```
+
+#### Step-by-step deployment
+1. `just tf-init` — Initialize Terraform (first time only)
+2. `just tf-plan` — Review Terraform plan
+3. `just tf-apply` — Create VM in Proxmox
+4. `just generate-inventory` — Generate Ansible inventory from Terraform outputs
+5. `just ansible-java` — Install Java 17 + Tomcat 10.1
+
+#### Alternative workflows
+- `just deploy` — Full deployment with Java/Tomcat
+- `just deploy-post` — Full deployment with basic post-install only
+- `just ansible-post` — Run basic post-configuration playbook
 
 ### Security policies
 - Do not commit secrets

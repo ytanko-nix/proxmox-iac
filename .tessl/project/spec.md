@@ -68,10 +68,11 @@ Terraform → Proxmox API → VM Instance (created)
 
 **Ansible (Optional):**
 - Handles post-deployment automation
-- Installs application stacks
+- Installs application stacks (e.g., Java 17 + Tomcat 10.1)
 - Configures services and daemons
 - Applies security hardening
 - Expandable with custom roles and playbooks
+- Auto-generated inventory from Terraform outputs
 
 ### Configuration Approach
 
@@ -117,16 +118,27 @@ proxmox-iac/
 ├── terraform/                   # Terraform configuration
 │   ├── main.tf                  # Provider and VM resource definitions
 │   ├── variables.tf             # Input variable declarations
+│   ├── outputs.tf               # Outputs for Ansible integration
 │   └── terraform.tfvars.example # Non-sensitive configuration template
 ├── cloud-init/                  # Cloud-Init templates
 │   └── cloud-init.yml           # Reference cloud-init configuration
 ├── ansible/                     # Ansible post-configuration
-│   ├── inventory.ini            # Inventory template
-│   └── post_install.yml         # Post-installation playbook
+│   ├── inventory.ini            # Auto-generated inventory
+│   ├── post_install.yml         # Post-installation playbook
+│   ├── java_tomcat.yml          # Java 17 + Tomcat 10.1 playbook
+│   └── templates/               # Jinja2 templates
+│       └── tomcat.service.j2    # Tomcat systemd service
+├── scripts/                     # Utility scripts
+│   ├── create_template.sh       # Cloud-Init template creation
+│   └── generate_inventory.sh    # Generate Ansible inventory from Terraform
 ├── docs/                        # Project documentation
 │   ├── ARCHITECTURE.md          # Architecture details
 │   ├── DESIGN.md                # Design decisions
-│   └── TODO.md                  # Planned improvements
+│   ├── TODO.md                  # Planned improvements
+│   └── features/                # Feature-specific documentation
+│       └── ansible-java-tomcat/ # Java/Tomcat integration feature
+│           ├── design.md        # Feature design document
+│           └── todo.md          # Feature TODO checklist
 ├── Justfile                     # Command automation recipes
 ├── README.md                    # Project overview and quick start
 ├── AGENTS.md                    # Agent configuration (Tessl)
@@ -279,6 +291,15 @@ The project uses [Just](https://casey.github.io/just/) for command automation. A
 | Command | Description |
 |:--------|:------------|
 | `just ansible-post` | Run post-installation playbook |
+| `just ansible-java` | Install Java 17 + Tomcat 10.1 |
+| `just generate-inventory` | Generate inventory from Terraform outputs |
+
+#### Workflow Commands
+
+| Command | Description |
+|:--------|:------------|
+| `just deploy` | Full deployment: tf-apply → generate-inventory → ansible-java |
+| `just deploy-post` | Full deployment: tf-apply → generate-inventory → ansible-post |
 
 #### Utilities
 

@@ -1,0 +1,171 @@
+---
+# Ansible playbook: Install Java 17 and Apache Tomcat 10.1
+# Usage: ansible-playbook -i inventory.ini java_tomcat.yml
+
+- name: Install Java and Tomcat
+  hosts: java_servers
+  become: true
+  gather_facts: true
+
+  vars:
+    # These can be overridden in inventory or via -e
+    java_version: "17"
+    tomcat_version: "10.1.31"
+    tomcat_user: "tomcat"
+    tomcat_group: "tomcat"
+    tomcat_install_dir: "/opt/tomcat"
+    tomcat_port: 8080
+    tomcat_mirror: "https://dlcdn.apache.org/tomcat/tomcat-10"
+
+  tasks:
+    # ============================================
+    # Java Installation
+    # ============================================
+    - name: Install OpenJDK {{ java_version }}
+      ansible.builtin.dnf:
+        name: "java-{{ java_version }}-openjdk"
+        state: present
+      register: java_install
+
+    - name: Install OpenJDK {{ java_version }} development tools
+      ansible.builtin.dnf:
+        name: "java-{{ java_version }}-openjdk-devel"
+        state: present
+
+    - name: Verify Java installation
+      ansible.builtin.command: java -version
+      register: java_version_output
+      changed_when: false
+
+    - name: Display Java version
+      ansible.builtin.debug:
+        msg: "{{ java_version_output.stderr_lines }}"
+
+    # ============================================
+    # Tomcat User Setup
+    # ============================================
+    - name: Create tomcat group
+      ansible.builtin.group:
+        name: "{{ tomcat_group }}"
+        state: present
+
+    - name: Create tomcat user
+      ansible.builtin.user:
+        name: "{{ tomcat_user }}"
+        group: "{{ tomcat_group }}"
+        home: "{{ tomcat_install_dir }}"
+        shell: /bin/false
+        system: true
+        create_home: false
+        state: present
+
+    # ============================================
+    # Tomcat Installation
+    # ============================================
+    - name: Create Tomcat installation directory
+      ansible.builtin.file:
+        path: "{{ tomcat_install_dir }}"
+        state: directory
+        owner: "{{ tomcat_user }}"
+        group: "{{ tomcat_group }}"
+        mode: '0755'
+
+    - name: Download Apache Tomcat {{ tomcat_version }}
+      ansible.builtin.get_url:
+        url: "{{ tomcat_mirror }}/v{{ tomcat_version }}/bin/apache-tomcat-{{ tomcat_version }}.tar.gz"
+        dest: "/tmp/apache-tomcat-{{ tomcat_version }}.tar.gz"
+        mode: '0644'
+      register: tomcat_download
+
+    - name: Extract Tomcat archive
+      ansible.builtin.unarchive:
+        src: "/tmp/apache-tomcat-{{ tomcat_version }}.tar.gz"
+        dest: "{{ tomcat_install_dir }}"
+        remote_src: true
+        owner: "{{ tomcat_user }}"
+        group: "{{ tomcat_group }}"
+        extra_opts:
+          - --strip-components=1
+      when: tomcat_download.changed or not ansible_check_mode
+
+    - name: Set ownership on Tomcat directory
+      ansible.builtin.file:
+        path: "{{ tomcat_install_dir }}"
+        state: directory
+        owner: "{{ tomcat_user }}"
+        group: "{{ tomcat_group }}"
+        recurse: true
+
+    - name: Make Tomcat scripts executable
+      ansible.builtin.file:
+        path: "{{ tomcat_install_dir }}/bin"
+        state: directory
+        mode: '0755'
+        recurse: true
+
+    # ============================================
+    # Systemd Service
+    # ============================================
+    - name: Create Tomcat systemd service file
+      ansible.builtin.template:
+        src: tomcat.service.j2
+        dest: /etc/systemd/system/tomcat.service
+        mode: '0644'
+      notify: Reload systemd
+
+    - name: Flush handlers to reload systemd
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable and start Tomcat service
+      ansible.builtin.systemd:
+        name: tomcat
+        state: started
+        enabled: true
+        daemon_reload: true
+
+    # ============================================
+    # Firewall Configuration
+    # ============================================
+    - name: Check if firewalld is running
+      ansible.builtin.systemd:
+        name: firewalld
+      register: firewalld_status
+      failed_when: false
+      changed_when: false
+
+    - name: Open Tomcat port in firewall
+      ansible.posix.firewalld:
+        port: "{{ tomcat_port }}/tcp"
+        permanent: true
+        state: enabled
+        immediate: true
+      when: firewalld_status.status.ActiveState == "active"
+
+    # ============================================
+    # Healthcheck
+    # ============================================
+    - name: Wait for Tomcat to start
+      ansible.builtin.uri:
+        url: "http://localhost:{{ tomcat_port }}"
+        status_code: 200
+        timeout: 5
+      register: tomcat_health
+      retries: 12
+      delay: 5
+      until: tomcat_health.status == 200
+
+    - name: Display Tomcat status
+      ansible.builtin.debug:
+        msg: |
+          Tomcat installation complete!
+          
+          Access URL: http://{{ ansible_host }}:{{ tomcat_port }}
+          Install dir: {{ tomcat_install_dir }}
+          Service: systemctl status tomcat
+          Logs: {{ tomcat_install_dir }}/logs/catalina.out
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: true
+
