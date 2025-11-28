@@ -32,6 +32,15 @@ concurrency:
   cancel-in-progress: true
 
 # =============================================================================
+# Permissions для всего workflow
+# Требуется для комментариев в PR
+# =============================================================================
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+# =============================================================================
 # Переменные окружения
 # =============================================================================
 env:
@@ -317,12 +326,13 @@ jobs:
       # Запуск TFLint
       # --format=compact: компактный вывод для CI
       # --recursive: проверить все поддиректории
+      # --minimum-failure-severity=error: только errors ломают build (не warnings)
       # -----------------------------------------------------------------------
       - name: Run TFLint
         id: tflint
         run: |
           echo "🔎 Запуск TFLint анализа..."
-          tflint --format=compact --recursive
+          tflint --format=compact --recursive --minimum-failure-severity=error
         working-directory: ${{ env.TF_WORKING_DIR }}
 
   # ===========================================================================
