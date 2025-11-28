@@ -2,7 +2,7 @@ terraform {
   required_providers {
     proxmox = {
       source  = "bpg/proxmox"
-      version = "0.71.0"
+      version = "~> 0.87.0"
     }
   }
   required_version = ">= 1.3.0"
@@ -25,7 +25,7 @@ resource "proxmox_virtual_environment_vm" "vm" {
   name      = var.vm_name
   node_name = var.target_node
   machine   = "pc"
-  
+
   clone {
     vm_id = parseint(regex("^(\\d+)", data.proxmox_virtual_environment_vms.templates.vms[0].vm_id)[0], 10)
     full  = true
@@ -37,7 +37,7 @@ resource "proxmox_virtual_environment_vm" "vm" {
     type    = "qemu64"
     flags   = ["-kvm"]
   }
-  
+
   vga {
     type = "std"
   }
@@ -60,7 +60,7 @@ resource "proxmox_virtual_environment_vm" "vm" {
       username = var.cloudinit_user
       keys     = local.ssh_keys
     }
-    
+
     ip_config {
       ipv4 {
         address = var.ip_config == "ip=dhcp" ? "dhcp" : null

@@ -16,6 +16,12 @@ help:
 	@echo ""
 	@echo "Ansible:"
 	@echo "  ansible-post         Run post-install playbook"
+	@echo "  ansible-java         Install Java 17 + Tomcat 10.1"
+	@echo "  generate-inventory   Generate inventory from Terraform outputs"
+	@echo ""
+	@echo "Workflows:"
+	@echo "  deploy               Full deployment: tf-apply → inventory → ansible-java"
+	@echo "  deploy-post          Full deployment: tf-apply → inventory → ansible-post"
 	@echo ""
 	@echo "Utilities:"
 	@echo "  upload-ci-snippet    Upload cloud-init to Proxmox snippets"
@@ -50,6 +56,32 @@ upload-ci-snippet:
 	scp cloud-init/cloud-init.yml "${PM_SSH_USER}@${PM_HOST}:/var/lib/vz/snippets/${VM_NAME}-cloud-init.yml"
 
 ansible-post:
+	cd ansible && ansible-playbook -i inventory.ini post_install.yml
+
+ansible-java:
+	cd ansible && ansible-playbook -i inventory.ini java_tomcat.yml
+
+generate-inventory:
+	./scripts/generate_inventory.sh
+
+# Full deployment workflow: create VM and install Java/Tomcat
+deploy: tf-apply
+	#!/bin/bash
+	set -euo pipefail
+	echo "Waiting for VM to get IP address..."
+	sleep 30
+	./scripts/generate_inventory.sh
+	cd ansible && ansible-playbook -i inventory.ini java_tomcat.yml
+	echo ""
+	echo "Deployment complete! Check Tomcat at http://<vm_ip>:8080"
+
+# Full deployment workflow: create VM and run post-install
+deploy-post: tf-apply
+	#!/bin/bash
+	set -euo pipefail
+	echo "Waiting for VM to get IP address..."
+	sleep 30
+	./scripts/generate_inventory.sh
 	cd ansible && ansible-playbook -i inventory.ini post_install.yml
 
 git-commit MSG="chore: update":
