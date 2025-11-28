@@ -18,8 +18,10 @@ provider "proxmox" {
 }
 
 locals {
-  vm_hostname = var.vm_hostname != null ? var.vm_hostname : var.vm_name
-  ssh_keys    = length(var.cloudinit_ssh_keys) > 0 ? var.cloudinit_ssh_keys : (var.ssh_public_key_path != "" ? [file(var.ssh_public_key_path)] : [])
+  vm_hostname    = var.vm_hostname != null ? var.vm_hostname : var.vm_name
+  ssh_keys       = length(var.cloudinit_ssh_keys) > 0 ? var.cloudinit_ssh_keys : (var.ssh_public_key_path != "" ? [file(var.ssh_public_key_path)] : [])
+  template_found = length(data.proxmox_virtual_environment_vms.templates.vms) > 0
+  template_vm_id = local.template_found ? parseint(regex("^(\\d+)", data.proxmox_virtual_environment_vms.templates.vms[0].vm_id)[0], 10) : -1
 }
 
 resource "proxmox_virtual_environment_vm" "vm" {
@@ -28,8 +30,15 @@ resource "proxmox_virtual_environment_vm" "vm" {
   machine   = "pc"
 
   clone {
-    vm_id = parseint(regex("^(\\d+)", data.proxmox_virtual_environment_vms.templates.vms[0].vm_id)[0], 10)
+    vm_id = local.template_vm_id
     full  = true
+  }
+
+  lifecycle {
+    precondition {
+      condition     = local.template_found
+      error_message = "Template '${var.template}' not found on node '${var.target_node}'. Please verify the template exists and the name matches exactly (case-sensitive)."
+    }
   }
 
   cpu {
