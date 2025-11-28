@@ -44,8 +44,7 @@ resource "proxmox_virtual_environment_vm" "vm" {
   cpu {
     sockets = var.cpu_sockets
     cores   = var.cpu_cores_per_socket
-    type    = "qemu64"
-    flags   = ["-kvm"]
+    type    = "kvm64"
   }
 
   vga {
@@ -78,15 +77,29 @@ resource "proxmox_virtual_environment_vm" "vm" {
     }
   }
 
-  on_boot = true
+  on_boot = false
+  started = false  # VM created but not started - KVM not available on host
   tags    = var.tags != "" ? split(",", var.tags) : []
+}
+
+data "proxmox_virtual_environment_vms" "all_vms" {
+  node_name = var.target_node
 }
 
 data "proxmox_virtual_environment_vms" "templates" {
   node_name = var.target_node
-  tags      = []
   filter {
     name   = "name"
     values = [var.template]
   }
+}
+
+output "debug_all_vms" {
+  description = "All VMs on the node (for debugging)"
+  value = [for vm in data.proxmox_virtual_environment_vms.all_vms.vms : {
+    id       = vm.vm_id
+    name     = vm.name
+    template = vm.template
+    tags     = vm.tags
+  }]
 }
