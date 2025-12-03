@@ -77,8 +77,8 @@ resource "proxmox_virtual_environment_vm" "vm" {
     }
   }
 
-  on_boot = false
-  started = false  # Don't start automatically - start manually to verify boot
+  on_boot = true
+  started = true
   tags    = var.tags != "" ? split(",", var.tags) : []
 }
 
