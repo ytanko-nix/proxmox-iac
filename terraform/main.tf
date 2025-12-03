@@ -44,8 +44,7 @@ resource "proxmox_virtual_environment_vm" "vm" {
   cpu {
     sockets = var.cpu_sockets
     cores   = var.cpu_cores_per_socket
-    type    = "qemu64"
-    flags   = ["-kvm"]
+    type    = "max"  # Maximum CPU features for better compatibility without KVM
   }
 
   vga {
@@ -78,7 +77,8 @@ resource "proxmox_virtual_environment_vm" "vm" {
     }
   }
 
-  on_boot = true
+  on_boot = false
+  started = false  # Don't start automatically - start manually to verify boot
   tags    = var.tags != "" ? split(",", var.tags) : []
 }
 
