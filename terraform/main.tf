@@ -44,7 +44,7 @@ resource "proxmox_virtual_environment_vm" "vm" {
   cpu {
     sockets = var.cpu_sockets
     cores   = var.cpu_cores_per_socket
-    type    = "max"  # Maximum CPU features for better compatibility without KVM
+    type    = "max" # Maximum CPU features for better compatibility without KVM
   }
 
   vga {
