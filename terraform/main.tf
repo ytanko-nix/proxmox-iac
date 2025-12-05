@@ -91,12 +91,12 @@ resource "proxmox_virtual_environment_vm" "vm" {
       type        = "ssh"
       user        = var.cloudinit_user
       private_key = file(var.ssh_private_key_path)
-      host        = self.default_ipv4_address
+      host        = self.ipv4_addresses[0]
     }
   }
 
   provisioner "local-exec" {
-    command = "ansible-playbook -i '${self.default_ipv4_address},' --private-key ${var.ssh_private_key_path} -u ${var.cloudinit_user} ../ansible/java_tomcat.yml"
+    command = "ansible-playbook -i '${self.ipv4_addresses[0]},' --private-key ${var.ssh_private_key_path} -u ${var.cloudinit_user} ../ansible/java_tomcat.yml"
   }
 }
 
