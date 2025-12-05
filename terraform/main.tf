@@ -96,7 +96,14 @@ resource "proxmox_virtual_environment_vm" "vm" {
   }
 
   provisioner "local-exec" {
-    command = "ansible-playbook -i '${self.ipv4_addresses[0]},' --private-key ${var.ssh_private_key_path} -u ${var.cloudinit_user} ../ansible/java_tomcat.yml"
+    command = <<EOT
+      while ! nc -vz ${self.ipv4_addresses[0]} 22; do
+        echo "Waiting for SSH to be available..."
+        sleep 5
+      done
+      echo "SSH is available. Running Ansible playbook..."
+      ansible-playbook -i '${self.ipv4_addresses[0]},' --private-key ${var.ssh_private_key_path} -u ${var.cloudinit_user} ../ansible/java_tomcat.yml
+    EOT
   }
 }
 
