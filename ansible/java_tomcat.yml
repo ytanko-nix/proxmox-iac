@@ -3,7 +3,7 @@
 # Usage: ansible-playbook -i inventory.ini java_tomcat.yml
 
 - name: Install Java and Tomcat
-  hosts: java_servers
+  hosts: all
   become: true
   gather_facts: true
 
