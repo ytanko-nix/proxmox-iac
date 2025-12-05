@@ -81,23 +81,23 @@ resource "proxmox_virtual_environment_vm" "vm" {
   started = true
   tags    = var.tags != "" ? split(",", var.tags) : []
 
-  provisioner "remote-exec" {
-    inline = [
-      "sudo apt-get update",
-      "sudo apt-get install -y python3"
-    ]
-
-    connection {
-      type        = "ssh"
-      user        = var.cloudinit_user
-      private_key = file(var.ssh_private_key_path)
-      host        = self.ipv4_addresses[0]
-    }
-  }
-
-  provisioner "local-exec" {
-    command = "ansible-playbook -i '${self.ipv4_addresses[0]},' --private-key ${var.ssh_private_key_path} -u ${var.cloudinit_user} ../ansible/java_tomcat.yml"
-  }
+  # provisioner "remote-exec" {
+  #   inline = [
+  #     "sudo apt-get update",
+  #     "sudo apt-get install -y python3"
+  #   ]
+  #
+  #   connection {
+  #     type        = "ssh"
+  #     user        = var.cloudinit_user
+  #     private_key = file(var.ssh_private_key_path)
+  #     host        = self.ipv4_addresses[0]
+  #   }
+  # }
+  #
+  # provisioner "local-exec" {
+  #   command = "ansible-playbook -i '${self.ipv4_addresses[0]},' --private-key ${var.ssh_private_key_path} -u ${var.cloudinit_user} ../ansible/java_tomcat.yml"
+  # }
 }
 
 data "proxmox_virtual_environment_vms" "templates" {
