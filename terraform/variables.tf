@@ -110,6 +110,12 @@ variable "ssh_public_key_path" {
   default     = ""
 }
 
+variable "ssh_private_key_path" {
+  description = "Path to private SSH key"
+  type        = string
+  default     = ""
+}
+
 variable "ip_config" {
   description = "ipconfig0 value (e.g., ip=dhcp)"
   type        = string
