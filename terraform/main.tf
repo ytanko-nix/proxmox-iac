@@ -111,7 +111,7 @@ resource "proxmox_virtual_environment_vm" "vm" {
       "curl -s -o /dev/null -w '%%{http_code}' http://localhost:8080 | grep -q 200 && echo 'Tomcat is responding on port 8080'",
       "echo ''",
       "echo '========================================'",
-      "echo 'Java и Tomcat установлены на машину ${var.vm_name} с адресом ${self.ipv4_addresses[1][0]}'",
+      "echo 'Java and Tomcat installed on ${var.vm_name} (${self.ipv4_addresses[1][0]})'",
       "echo '========================================'"
     ]
 

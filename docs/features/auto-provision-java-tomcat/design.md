@@ -7,68 +7,68 @@
 - Related issues/PRs: N/A
 
 ## Goals and Motivation
-Problem: После создания VM через Terraform необходимо автоматически установить Java и Tomcat, дождаться готовности машины и вывести пользователю подтверждающее сообщение с информацией о машине.
+Problem: After creating a VM via Terraform, we need to automatically install Java and Tomcat, wait for the machine to be ready, and display a confirmation message to the user with machine information.
 
-Proposed Solution: Использовать Terraform provisioners для:
-1. Ожидания готовности VM (SSH доступность)
-2. Запуска Ansible playbook для установки Java 17 + Tomcat 10.1
-3. Верификации успешной установки
-4. Вывода сообщения с именем VM и IP-адресом
+Proposed Solution: Use Terraform provisioners to:
+1. Wait for VM readiness (SSH availability)
+2. Run Ansible playbook to install Java 17 + Tomcat 10.1
+3. Verify successful installation
+4. Output message with VM name and IP address
 
 Benefits:
-- Полностью автоматизированный процесс развертывания
-- Верификация успешности установки
-- Информативный вывод для пользователя
+- Fully automated deployment process
+- Installation verification
+- Informative output for the user
 
 ## Requirements
 
 ### Functional Requirements
-- FR-1: После создания VM автоматически дождаться её готовности (SSH доступность)
-- FR-2: Установить Python3 (зависимость для Ansible)
-- FR-3: Запустить Ansible playbook для установки Java 17 и Tomcat 10.1
-- FR-4: Верифицировать наличие Java на машине
-- FR-5: Верифицировать наличие Tomcat на машине
-- FR-6: Вывести сообщение: "Java и Tomcat установлены на машину [имя] с адресом [IP]"
+- FR-1: After VM creation, automatically wait for its readiness (SSH availability)
+- FR-2: Install Python3 (dependency for Ansible)
+- FR-3: Run Ansible playbook to install Java 17 and Tomcat 10.1
+- FR-4: Verify Java presence on the machine
+- FR-5: Verify Tomcat presence on the machine
+- FR-6: Output message: "Java and Tomcat installed on [name] ([IP])"
 
 ### Non-Functional Requirements
-- Performance: Установка должна завершиться в течение 10 минут
-- Security: SSH ключи не должны попадать в логи
-- Reliability: При ошибке установки — чёткое сообщение об ошибке
-- Maintainability: Версии Java/Tomcat должны быть конфигурируемыми
+- Performance: Installation should complete within 10 minutes
+- Security: SSH keys should not appear in logs
+- Reliability: Clear error message on installation failure
+- Maintainability: Java/Tomcat versions should be configurable
 
 ## Assumptions and Constraints
 
 Assumptions:
-- VM template имеет Cloud-Init и поддерживает SSH
-- Сеть настроена (DHCP или статический IP)
-- SSH private key доступен локально
+- VM template has Cloud-Init and supports SSH
+- Network is configured (DHCP or static IP)
+- SSH private key is available locally
 
 Constraints:
-- Terraform provisioners выполняются только при создании ресурса
-- Ansible требует Python на целевой машине
+- Terraform provisioners only execute on resource creation
+- Ansible requires Python on the target machine
 
 Out of Scope:
-- Конфигурация приложений внутри Tomcat
-- SSL/TLS настройка для Tomcat
+- Application configuration inside Tomcat
+- SSL/TLS setup for Tomcat
 
 ## Architecture and Design
 
 ### Components
 
 Component 1: Terraform Provisioners
-- Purpose: Оркестрация post-deployment автоматизации
-- Responsibilities: Ожидание VM, запуск Ansible
-- Interactions: SSH к VM, вызов ansible-playbook
+- Purpose: Orchestrate post-deployment automation
+- Responsibilities: Wait for VM, run Ansible
+- Interactions: SSH to VM, invoke ansible-playbook
 
 Component 2: Ansible Playbook (java_tomcat.yml)
-- Purpose: Установка и конфигурация Java + Tomcat
-- Responsibilities: Установка пакетов, настройка systemd, firewall
-- Interactions: SSH к VM, dnf/apt
+- Purpose: Install and configure Java + Tomcat
+- Responsibilities: Package installation, systemd setup, firewall
+- Interactions: SSH to VM, dnf/apt
 
 Component 3: Verification & Output
-- Purpose: Проверка успешности и информирование пользователя
-- Responsibilities: Проверка java -version, curl Tomcat, вывод сообщения
-- Interactions: SSH к VM, stdout
+- Purpose: Verify success and inform the user
+- Responsibilities: Check java -version, curl Tomcat, output message
+- Interactions: SSH to VM, stdout
 
 ### Dependencies
 
@@ -109,48 +109,48 @@ local-exec provisioner:
 ## Implementation Stages
 
 ### Stage 1: Verify and Fix Current Implementation
-Description: Проверить работоспособность текущих provisioners
+Description: Verify current provisioners functionality
 
 Tasks:
-- Проверить синтаксис provisioners в main.tf
-- Проверить корректность путей и переменных
-- Убедиться, что ipv4_addresses доступен корректно
+- Check provisioners syntax in main.tf
+- Verify paths and variables correctness
+- Ensure ipv4_addresses is accessed correctly
 
 Exit Criteria:
-- [ ] terraform validate проходит успешно
-- [ ] Provisioners используют правильные атрибуты ресурса
+- [ ] terraform validate passes successfully
+- [ ] Provisioners use correct resource attributes
 
 ### Stage 2: Add Verification and Output
-Description: Добавить верификацию установки и вывод сообщения
+Description: Add installation verification and output message
 
 Tasks:
-- Добавить верификацию java -version после Ansible
-- Добавить верификацию Tomcat (curl или systemctl)
-- Добавить финальный вывод с именем VM и IP
+- Add java -version verification after Ansible
+- Add Tomcat verification (curl or systemctl)
+- Add final output with VM name and IP
 
 Exit Criteria:
-- [ ] Java верифицирован на целевой машине
-- [ ] Tomcat верифицирован на целевой машине
-- [ ] Выводится сообщение с именем и IP
+- [ ] Java verified on target machine
+- [ ] Tomcat verified on target machine
+- [ ] Message with name and IP is displayed
 
 ### Stage 3: Documentation
-Description: Обновить документацию
+Description: Update documentation
 
 Tasks:
-- Обновить .tessl/project/spec.md
-- Создать todo.md для фичи
-- Обновить README если нужно
+- Update .tessl/project/spec.md
+- Create todo.md for the feature
+- Update README if needed
 
 Exit Criteria:
-- [ ] Документация актуальна
-- [ ] Фича задокументирована в spec.md
+- [ ] Documentation is up to date
+- [ ] Feature is documented in spec.md
 
 ## Acceptance Criteria
-- [ ] AC-1: VM создаётся через terraform apply
-- [ ] AC-2: Java 17 автоматически устанавливается
-- [ ] AC-3: Tomcat 10.1 автоматически устанавливается
-- [ ] AC-4: Установка верифицируется (java -version, Tomcat health)
-- [ ] AC-5: Выводится сообщение "Java и Tomcat установлены на [name] с адресом [IP]"
+- [ ] AC-1: VM is created via terraform apply
+- [ ] AC-2: Java 17 is automatically installed
+- [ ] AC-3: Tomcat 10.1 is automatically installed
+- [ ] AC-4: Installation is verified (java -version, Tomcat health)
+- [ ] AC-5: Message "Java and Tomcat installed on [name] ([IP])" is displayed
 
 ## Testing
 

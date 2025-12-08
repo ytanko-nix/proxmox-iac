@@ -13,7 +13,7 @@ Owner: Agent
 
 ## Stage 1: Fix Current Implementation
 
-Status: 🟢 Done
+Status: Done
 
 ### Preparation
 - [x] Review Terraform provisioner documentation
@@ -35,7 +35,7 @@ Status: 🟢 Done
 
 ## Stage 2: Add Verification and Output
 
-Status: 🟢 Done
+Status: Done
 
 ### Preparation
 - [x] Review Ansible playbook verification tasks
@@ -58,13 +58,13 @@ Status: 🟢 Done
 
 ## Stage 3: Documentation
 
-Status: 🟢 Done
+Status: Done
 
 ### Tasks
 - [x] Create design.md document
 - [x] Create todo.md checklist
-- [ ] Update `.tessl/project/spec.md` (добавить фичу в документацию)
-- [ ] Update README.md (если нужно)
+- [x] Update `.tessl/project/spec.md` (add feature to documentation)
+- [ ] Update README.md (if needed)
 - [ ] Test full deployment cycle
 
 ---

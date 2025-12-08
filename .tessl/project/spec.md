@@ -514,22 +514,22 @@ Use `tessl registry search` and `tessl registry install` to add these specs.
 **Status**: Implemented (2025-12-08)
 **Documentation**: [docs/features/auto-provision-java-tomcat/](../../docs/features/auto-provision-java-tomcat/)
 
-**Description**: После создания VM через Terraform автоматически:
-1. Ожидает готовности VM (SSH доступность, cloud-init completion)
-2. Устанавливает Python3 (зависимость для Ansible)
-3. Запускает Ansible playbook для установки Java 17 + Tomcat 10.1
-4. Верифицирует установку (java -version, systemctl status tomcat, HTTP check)
-5. Выводит сообщение: "Java и Tomcat установлены на машину [имя] с адресом [IP]"
+**Description**: After creating a VM via Terraform, automatically:
+1. Waits for VM readiness (SSH availability, cloud-init completion)
+2. Installs Python3 (Ansible dependency)
+3. Runs Ansible playbook to install Java 17 + Tomcat 10.1
+4. Verifies installation (java -version, systemctl status tomcat, HTTP check)
+5. Outputs message: "Java and Tomcat installed on [name] ([IP])"
 
-**Используемые компоненты**:
+**Components used**:
 - Terraform provisioners (remote-exec, local-exec)
 - Ansible playbook: `ansible/java_tomcat.yml`
 - bpg/proxmox provider `ipv4_addresses` attribute
 
-**Запуск**:
+**Usage**:
 ```bash
 just tf-apply
-# или
+# or
 terraform apply
 ```
 
