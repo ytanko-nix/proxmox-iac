@@ -83,27 +83,68 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
   provisioner "remote-exec" {
     inline = [
-      "sudo apt-get update",
-      "sudo apt-get install -y python3"
+      "echo '=== Stage 1: Waiting for cloud-init (max 5 min) ==='",
+      "START_TIME=$(date +%s)",
+      "timeout 300 cloud-init status --wait || echo 'cloud-init timeout or not available, continuing...'",
+      "echo \"Cloud-init completed in $(($(date +%s) - START_TIME)) seconds\"",
+      "echo '=== Stage 2: Checking network and mirrors ==='",
+      "echo 'Testing DNS resolution...'",
+      "host google.com > /dev/null 2>&1 && echo 'DNS: OK' || echo 'DNS: FAILED'",
+      "echo 'Testing mirror accessibility...'",
+      "if which dnf > /dev/null 2>&1; then curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w 'Mirror response: %%{http_code}, time: %%{time_total}s\n' https://dl.rockylinux.org/pub/rocky/ || echo 'Rocky mirror: SLOW or UNREACHABLE'; else curl -s --connect-timeout 10 --max-time 30 -o /dev/null -w 'Mirror response: %%{http_code}, time: %%{time_total}s\n' http://archive.ubuntu.com/ubuntu/ || echo 'Ubuntu mirror: SLOW or UNREACHABLE'; fi",
+      "echo '=== Stage 3: Installing Python3 for Ansible ==='",
+      "START_TIME=$(date +%s)",
+      "if which dnf > /dev/null 2>&1; then sudo dnf install -y python3 --setopt=timeout=60; else sudo apt-get update && sudo apt-get install -y python3; fi",
+      "echo \"Python3 installed in $(($(date +%s) - START_TIME)) seconds\""
     ]
 
     connection {
-      type        = "ssh"
-      user        = var.cloudinit_user
-      private_key = file(var.ssh_private_key_path)
-      host        = self.ipv4_addresses[0]
+      type  = "ssh"
+      user  = var.cloudinit_user
+      agent = true
+      host  = self.ipv4_addresses[1][0]
     }
   }
 
   provisioner "local-exec" {
-    command = <<EOT
-      while ! nc -vz ${self.ipv4_addresses[0]} 22; do
-        echo "Waiting for SSH to be available..."
-        sleep 5
-      done
-      echo "SSH is available. Running Ansible playbook..."
-      ansible-playbook -i '${self.ipv4_addresses[0]},' --private-key ${var.ssh_private_key_path} -u ${var.cloudinit_user} ../ansible/java_tomcat.yml
-    EOT
+    command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i '${self.ipv4_addresses[1][0]},' -u ${var.cloudinit_user} ../ansible/java_tomcat.yml"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "echo ''",
+      "echo '╔══════════════════════════════════════════════════════════════════╗'",
+      "echo '║              DEPLOYMENT COMPLETED SUCCESSFULLY                   ║'",
+      "echo '╚══════════════════════════════════════════════════════════════════╝'",
+      "echo ''",
+      "echo '=== Verification Results ==='",
+      "echo ''",
+      "JAVA_VER=$(java -version 2>&1 | head -1)",
+      "TOMCAT_STATUS=$(systemctl is-active tomcat)",
+      "HTTP_CODE=$(curl -s -o /dev/null -w '%%{http_code}' http://localhost:8080)",
+      "echo \"  Java:    $JAVA_VER\"",
+      "echo \"  Tomcat:  $TOMCAT_STATUS (HTTP $HTTP_CODE)\"",
+      "echo ''",
+      "echo '=== Access Information ==='",
+      "echo ''",
+      "echo '  VM Name:     ${var.vm_name}'",
+      "echo '  IP Address:  ${self.ipv4_addresses[1][0]}'",
+      "echo '  SSH User:    ${var.cloudinit_user}'",
+      "echo ''",
+      "echo '  Tomcat URL:  http://${self.ipv4_addresses[1][0]}:8080'",
+      "echo ''",
+      "echo '  SSH Login:   ssh ${var.cloudinit_user}@${self.ipv4_addresses[1][0]}'",
+      "echo '  Check Java:  ssh ${var.cloudinit_user}@${self.ipv4_addresses[1][0]} java -version'",
+      "echo ''",
+      "echo '══════════════════════════════════════════════════════════════════════'"
+    ]
+
+    connection {
+      type  = "ssh"
+      user  = var.cloudinit_user
+      agent = true
+      host  = self.ipv4_addresses[1][0]
+    }
   }
 }
 

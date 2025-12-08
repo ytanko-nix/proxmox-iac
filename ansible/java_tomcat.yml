@@ -10,7 +10,7 @@
   vars:
     # These can be overridden in inventory or via -e
     java_version: "17"
-    tomcat_version: "10.1.31"
+    tomcat_version: "10.1.49"
     tomcat_user: "tomcat"
     tomcat_group: "tomcat"
     tomcat_install_dir: "/opt/tomcat"
