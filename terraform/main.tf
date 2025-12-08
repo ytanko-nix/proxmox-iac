@@ -83,20 +83,44 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
   provisioner "remote-exec" {
     inline = [
-      "sudo apt-get update",
-      "sudo apt-get install -y python3"
+      "echo 'Waiting for cloud-init to complete...'",
+      "cloud-init status --wait || true",
+      "echo 'Installing Python3 for Ansible...'",
+      "which dnf && sudo dnf install -y python3 || sudo apt-get update && sudo apt-get install -y python3",
+      "echo 'Python3 installed successfully'"
     ]
 
     connection {
       type        = "ssh"
       user        = var.cloudinit_user
       private_key = file(var.ssh_private_key_path)
-      host        = self.ipv4_addresses[0]
+      host        = self.ipv4_addresses[1][0]
     }
   }
 
   provisioner "local-exec" {
-    command = "ansible-playbook -i '${self.ipv4_addresses[0]},' --private-key ${var.ssh_private_key_path} -u ${var.cloudinit_user} ../ansible/java_tomcat.yml"
+    command = "ansible-playbook -i '${self.ipv4_addresses[1][0]},' --private-key ${var.ssh_private_key_path} -u ${var.cloudinit_user} ../ansible/java_tomcat.yml"
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "echo '=== Verifying Java installation ==='",
+      "java -version",
+      "echo '=== Verifying Tomcat installation ==='",
+      "systemctl is-active tomcat",
+      "curl -s -o /dev/null -w '%%{http_code}' http://localhost:8080 | grep -q 200 && echo 'Tomcat is responding on port 8080'",
+      "echo ''",
+      "echo '========================================'",
+      "echo 'Java и Tomcat установлены на машину ${var.vm_name} с адресом ${self.ipv4_addresses[1][0]}'",
+      "echo '========================================'"
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = var.cloudinit_user
+      private_key = file(var.ssh_private_key_path)
+      host        = self.ipv4_addresses[1][0]
+    }
   }
 }
 

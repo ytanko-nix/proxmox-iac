@@ -507,6 +507,32 @@ Use `tessl registry search` and `tessl registry install` to add these specs.
 - **Security Audits**: Audit secrets management and access controls regularly
 - **Backups**: Ensure Terraform state is backed up (consider remote backend)
 
+## Implemented Features
+
+### Auto Provision Java + Tomcat
+
+**Status**: Implemented (2025-12-08)
+**Documentation**: [docs/features/auto-provision-java-tomcat/](../../docs/features/auto-provision-java-tomcat/)
+
+**Description**: После создания VM через Terraform автоматически:
+1. Ожидает готовности VM (SSH доступность, cloud-init completion)
+2. Устанавливает Python3 (зависимость для Ansible)
+3. Запускает Ansible playbook для установки Java 17 + Tomcat 10.1
+4. Верифицирует установку (java -version, systemctl status tomcat, HTTP check)
+5. Выводит сообщение: "Java и Tomcat установлены на машину [имя] с адресом [IP]"
+
+**Используемые компоненты**:
+- Terraform provisioners (remote-exec, local-exec)
+- Ansible playbook: `ansible/java_tomcat.yml`
+- bpg/proxmox provider `ipv4_addresses` attribute
+
+**Запуск**:
+```bash
+just tf-apply
+# или
+terraform apply
+```
+
 ## Planned Improvements
 
 See [docs/TODO.md](../../docs/TODO.md) for current task list.
