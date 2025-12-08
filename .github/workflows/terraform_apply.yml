@@ -20,15 +20,15 @@
 name: Terraform Plan & Apply
 
 on:
-  # Запуск после merge в main
-  push:
-    branches:
-      - main
-    paths:
-      - 'terraform/**'
-      - '.github/workflows/terraform_apply.yml'
+  # Disabled: auto-run on push to main (requires secrets)
+  # push:
+  #   branches:
+  #     - main
+  #   paths:
+  #     - 'terraform/**'
+  #     - '.github/workflows/terraform_apply.yml'
 
-  # Ручной запуск с выбором workspace
+  # Manual trigger only
   workflow_dispatch:
     inputs:
       workspace:
