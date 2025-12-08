@@ -99,10 +99,10 @@ resource "proxmox_virtual_environment_vm" "vm" {
     ]
 
     connection {
-      type        = "ssh"
-      user        = var.cloudinit_user
-      agent       = true
-      host        = self.ipv4_addresses[1][0]
+      type  = "ssh"
+      user  = var.cloudinit_user
+      agent = true
+      host  = self.ipv4_addresses[1][0]
     }
   }
 
@@ -140,10 +140,10 @@ resource "proxmox_virtual_environment_vm" "vm" {
     ]
 
     connection {
-      type        = "ssh"
-      user        = var.cloudinit_user
-      agent       = true
-      host        = self.ipv4_addresses[1][0]
+      type  = "ssh"
+      user  = var.cloudinit_user
+      agent = true
+      host  = self.ipv4_addresses[1][0]
     }
   }
 }
