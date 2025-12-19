@@ -29,6 +29,21 @@ fi
 VM_NAME=$(terraform output -raw vm_name 2>/dev/null || echo "")
 VM_IP=$(terraform output -raw vm_ip 2>/dev/null || echo "")
 VM_USER=$(terraform output -raw vm_user 2>/dev/null || echo "")
+VM_OS_FAMILY=$(terraform output -raw vm_os_family 2>/dev/null || echo "")
+VM_TEMPLATE=$(terraform output -raw vm_template 2>/dev/null || echo "")
+
+if [[ "$VM_OS_FAMILY" == "windows" ]]; then
+    echo "Error: The created VM is Windows (vm_os_family=windows)."
+    echo "This script generates an SSH-based Ansible inventory for Linux VMs and is not applicable to Windows."
+    echo ""
+    echo "VM Details:"
+    echo "  Name:     ${VM_NAME:-<empty>}"
+    echo "  IP:       ${VM_IP:-<empty>}"
+    echo "  Template: ${VM_TEMPLATE:-<empty>}"
+    echo ""
+    echo "Hint: For Windows automation, consider using WinRM and an Ansible Windows inventory/group instead."
+    exit 1
+fi
 
 # Validate outputs
 if [[ -z "$VM_NAME" || -z "$VM_IP" || -z "$VM_USER" ]]; then
@@ -36,6 +51,7 @@ if [[ -z "$VM_NAME" || -z "$VM_IP" || -z "$VM_USER" ]]; then
     echo "  VM_NAME: ${VM_NAME:-<empty>}"
     echo "  VM_IP: ${VM_IP:-<empty>}"
     echo "  VM_USER: ${VM_USER:-<empty>}"
+    echo "  VM_OS_FAMILY: ${VM_OS_FAMILY:-<empty>}"
     exit 1
 fi
 
