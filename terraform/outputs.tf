@@ -26,3 +26,13 @@ output "vm_node" {
   value       = proxmox_virtual_environment_vm.vm.node_name
 }
 
+output "vm_os_family" {
+  description = "OS family for the VM (linux/windows)"
+  value       = var.vm_os_family
+}
+
+output "vm_template" {
+  description = "Effective Proxmox template name used for cloning"
+  value       = local.template_name
+}
+

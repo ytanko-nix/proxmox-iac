@@ -8,7 +8,20 @@ pm_tls_insecure     = true
 target_node = "node1"  # Proxmox node name
 vm_name     = "my-vm"  # VM name in Proxmox
 vm_hostname = null     # Optional: hostname (defaults to vm_name)
-template    = "rocky9-cloudinit-template"  # Cloud-Init template to clone from
+
+# VM platform
+vm_os_family = "linux" # linux | windows
+
+# Linux template (required when vm_os_family="linux")
+template = "rocky9-cloudinit-template"
+
+# Windows templates (required when vm_os_family="windows")
+# windows_server_version = "2022" # 2019 | 2022
+# windows_template_2019  = "win2019-template"
+# windows_template_2022  = "win2022-template"
+
+# QEMU machine type (override if your template uses q35/UEFI, etc.)
+vm_machine = "pc"
 
 # Resources
 cpu_sockets           = 1

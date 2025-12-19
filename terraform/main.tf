@@ -3,7 +3,10 @@ terraform {
     proxmox = {
       source  = "bpg/proxmox"
       version = "~> 0.87.0"
-
+    }
+    null = {
+      source  = "hashicorp/null"
+      version = "~> 3.2"
     }
   }
   required_version = ">= 1.3.0"
@@ -18,8 +21,20 @@ provider "proxmox" {
 }
 
 locals {
-  vm_hostname    = var.vm_hostname != null ? var.vm_hostname : var.vm_name
-  ssh_keys       = length(var.cloudinit_ssh_keys) > 0 ? var.cloudinit_ssh_keys : (var.ssh_public_key_path != "" ? [file(var.ssh_public_key_path)] : [])
+  vm_hostname = var.vm_hostname != null ? var.vm_hostname : var.vm_name
+
+  is_windows                     = var.vm_os_family == "windows"
+  cloudinit_enabled_effective    = var.cloudinit_enabled != null ? var.cloudinit_enabled : !local.is_windows
+  provisioning_enabled_effective = var.provisioning_enabled != null ? var.provisioning_enabled : !local.is_windows
+
+  ssh_keys = length(var.cloudinit_ssh_keys) > 0 ? var.cloudinit_ssh_keys : (var.ssh_public_key_path != "" ? [file(var.ssh_public_key_path)] : [])
+
+  windows_template_name = local.is_windows ? (
+    var.windows_server_version == "2019" ? coalesce(var.windows_template_2019, "") : coalesce(var.windows_template_2022, "")
+  ) : ""
+
+  template_name = local.is_windows ? local.windows_template_name : coalesce(var.template, "")
+
   template_found = length(data.proxmox_virtual_environment_vms.templates.vms) > 0
   template_vm_id = local.template_found ? parseint(regex("^(\\d+)", data.proxmox_virtual_environment_vms.templates.vms[0].vm_id)[0], 10) : -1
 }
@@ -27,7 +42,7 @@ locals {
 resource "proxmox_virtual_environment_vm" "vm" {
   name      = var.vm_name
   node_name = var.target_node
-  machine   = "pc"
+  machine   = var.vm_machine
 
   clone {
     vm_id = local.template_vm_id
@@ -36,8 +51,12 @@ resource "proxmox_virtual_environment_vm" "vm" {
 
   lifecycle {
     precondition {
+      condition     = local.template_name != ""
+      error_message = local.is_windows ? "Windows template name is not set. Set windows_template_2019/2022 (based on windows_server_version) or change vm_os_family." : "Linux template name is not set. Set template or change vm_os_family."
+    }
+    precondition {
       condition     = local.template_found
-      error_message = "Template '${var.template}' not found on node '${var.target_node}'. Please verify the template exists and the name matches exactly (case-sensitive)."
+      error_message = "Template '${local.template_name}' not found on node '${var.target_node}'. Please verify the template exists and the name matches exactly (case-sensitive)."
     }
   }
 
@@ -64,15 +83,18 @@ resource "proxmox_virtual_environment_vm" "vm" {
     enabled = var.qemu_agent
   }
 
-  initialization {
-    user_account {
-      username = var.cloudinit_user
-      keys     = local.ssh_keys
-    }
+  dynamic "initialization" {
+    for_each = local.cloudinit_enabled_effective ? [1] : []
+    content {
+      user_account {
+        username = var.cloudinit_user
+        keys     = local.ssh_keys
+      }
 
-    ip_config {
-      ipv4 {
-        address = var.ip_config == "ip=dhcp" ? "dhcp" : null
+      ip_config {
+        ipv4 {
+          address = var.ip_config == "ip=dhcp" ? "dhcp" : null
+        }
       }
     }
   }
@@ -80,6 +102,14 @@ resource "proxmox_virtual_environment_vm" "vm" {
   on_boot = true
   started = true
   tags    = var.tags != "" ? split(",", var.tags) : []
+}
+
+resource "null_resource" "post_provision" {
+  count = local.provisioning_enabled_effective ? 1 : 0
+
+  triggers = {
+    vm_id = proxmox_virtual_environment_vm.vm.vm_id
+  }
 
   provisioner "remote-exec" {
     inline = [
@@ -102,12 +132,13 @@ resource "proxmox_virtual_environment_vm" "vm" {
       type  = "ssh"
       user  = var.cloudinit_user
       agent = true
-      host  = self.ipv4_addresses[1][0]
+      host  = proxmox_virtual_environment_vm.vm.ipv4_addresses[1][0]
     }
   }
 
   provisioner "local-exec" {
-    command = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i '${self.ipv4_addresses[1][0]},' -u ${var.cloudinit_user} ../ansible/java_tomcat.yml"
+    command     = "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i '${proxmox_virtual_environment_vm.vm.ipv4_addresses[1][0]},' -u ${var.cloudinit_user} ../ansible/java_tomcat.yml"
+    working_dir = path.module
   }
 
   provisioner "remote-exec" {
@@ -128,13 +159,13 @@ resource "proxmox_virtual_environment_vm" "vm" {
       "echo '=== Access Information ==='",
       "echo ''",
       "echo '  VM Name:     ${var.vm_name}'",
-      "echo '  IP Address:  ${self.ipv4_addresses[1][0]}'",
+      "echo '  IP Address:  ${proxmox_virtual_environment_vm.vm.ipv4_addresses[1][0]}'",
       "echo '  SSH User:    ${var.cloudinit_user}'",
       "echo ''",
-      "echo '  Tomcat URL:  http://${self.ipv4_addresses[1][0]}:8080'",
+      "echo '  Tomcat URL:  http://${proxmox_virtual_environment_vm.vm.ipv4_addresses[1][0]}:8080'",
       "echo ''",
-      "echo '  SSH Login:   ssh ${var.cloudinit_user}@${self.ipv4_addresses[1][0]}'",
-      "echo '  Check Java:  ssh ${var.cloudinit_user}@${self.ipv4_addresses[1][0]} java -version'",
+      "echo '  SSH Login:   ssh ${var.cloudinit_user}@${proxmox_virtual_environment_vm.vm.ipv4_addresses[1][0]}'",
+      "echo '  Check Java:  ssh ${var.cloudinit_user}@${proxmox_virtual_environment_vm.vm.ipv4_addresses[1][0]} java -version'",
       "echo ''",
       "echo '══════════════════════════════════════════════════════════════════════'"
     ]
@@ -143,7 +174,7 @@ resource "proxmox_virtual_environment_vm" "vm" {
       type  = "ssh"
       user  = var.cloudinit_user
       agent = true
-      host  = self.ipv4_addresses[1][0]
+      host  = proxmox_virtual_environment_vm.vm.ipv4_addresses[1][0]
     }
   }
 }
@@ -153,6 +184,6 @@ data "proxmox_virtual_environment_vms" "templates" {
   tags      = []
   filter {
     name   = "name"
-    values = [var.template]
+    values = [local.template_name]
   }
 }

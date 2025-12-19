@@ -51,9 +51,62 @@ variable "vm_hostname" {
   default     = null
 }
 
-variable "template" {
-  description = "Cloud-Init template to clone from"
+variable "vm_os_family" {
+  description = "OS family for the VM. Controls defaults for cloud-init and provisioning. Allowed: linux, windows."
   type        = string
+  default     = "linux"
+
+  validation {
+    condition     = contains(["linux", "windows"], var.vm_os_family)
+    error_message = "vm_os_family must be one of: linux, windows."
+  }
+}
+
+variable "cloudinit_enabled" {
+  description = "Whether to configure Cloud-Init initialization on the VM. If null, defaults to true for linux and false for windows."
+  type        = bool
+  default     = null
+}
+
+variable "provisioning_enabled" {
+  description = "Whether to run post-provision steps (SSH remote-exec + local Ansible). If null, defaults to true for linux and false for windows."
+  type        = bool
+  default     = null
+}
+
+variable "vm_machine" {
+  description = "QEMU machine type (e.g., pc, q35). Defaults to pc."
+  type        = string
+  default     = "pc"
+}
+
+variable "template" {
+  description = "Template VM name to clone from. Required when vm_os_family = \"linux\". For Windows VMs, use windows_template_2019 / windows_template_2022 instead."
+  type        = string
+  default     = null
+}
+
+variable "windows_server_version" {
+  description = "Windows Server version for Windows VMs. Allowed: 2019, 2022. Used when vm_os_family = \"windows\"."
+  type        = string
+  default     = "2022"
+
+  validation {
+    condition     = contains(["2019", "2022"], var.windows_server_version)
+    error_message = "windows_server_version must be one of: 2019, 2022."
+  }
+}
+
+variable "windows_template_2019" {
+  description = "Proxmox template VM name for Windows Server 2019. Required when vm_os_family=\"windows\" and windows_server_version=\"2019\"."
+  type        = string
+  default     = null
+}
+
+variable "windows_template_2022" {
+  description = "Proxmox template VM name for Windows Server 2022. Required when vm_os_family=\"windows\" and windows_server_version=\"2022\"."
+  type        = string
+  default     = null
 }
 
 variable "cpu_sockets" {
